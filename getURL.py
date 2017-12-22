@@ -42,62 +42,90 @@ def get_content(url, headers):
     	content=None
     return content
 
-
+class Media:
+    num=0
+    updated=0
+    def __init__(self,name=None):
+        self.lists=[]
+        Media.num+=1
+        self.num=Media.num
+        if name:
+            self.filename=name
+        else:
+            self.filename=str(Media.num)+'.scp'
+    def save(self):
+        f=open('./'+self.filename,'w')
+        f.write('\n'.join(self.lists))
+        f.close()
+        
+        
+        
+        
+        
 home_page = get_content(url, my_headers)
 home_soup = BeautifulSoup(home_page, 'lxml')
-ul_lists = home_soup.find_all('ul')
+media=home_soup.find_all('h2')
 
-video_flag = 0
-videos = list()
-pictures = list()
-pat_vn = re.compile('(.+?)\s')
-pat_pn = re.compile('(.+?)\[(.+?)\]')
-pat_mp4 = re.compile('http(.+?)mp4')
-update_v,update_p=open('./last_update.txt','r').read().split(',')
-update_flag=0
-for lists in ul_lists:
-    video_flag=not video_flag
-    if video_flag:
-        if lists.a.next_sibling.string==update_v:
-            continue
-        else:
-            update_v=lists.a.next_sibling.string
-            for a in lists.find_all('a'):
-                sub_page = get_content(url + a['href'], my_headers)
-                if sub_page:
-                    temp_name = pat_vn.search(a.string)
-                    filename = temp_name.group(1) if temp_name else a.string[:4]
-                    url_mp4 = pat_mp4.search(sub_page)
-                    if url_mp4:
-                        videos.append('filename=' + filename +
-                                      '&fileurl=' + url_mp4.group(0))
-        f_video=open('./video.downlist','w')
-        f_video.write('\n'.join(videos))
-        f_video.close()
-    else:
-        if lists.a.next_sibling.string==update_p:
-            continue
-        else:
-            update_p=lists.a.next_sibling.string
-            for a in lists.find_all('a'):
-                sub_page = get_content(url + a['href'], my_headers)
-                if sub_page:
-                    sub_soup=BeautifulSoup(sub_page,'lxml')
-                    temp_name = pat_pn.search(a.string)
-                    filename = temp_name.group(1) if temp_name else a.string[:4]
-                    div_tag=sub_soup.h1.parent
-                    pic_count=0
-                    for img in div_tag.find_all('img'):
-                        pic_count=pic_count+1
-                        pictures.append(img['src']+'\t'+filename+str(pic_count)+'.jpg')
+video=Media('video.downlist')
+pic=Media('pic.scp')
 
+#检查更新
+video.last_update,pic.last_update=open('./last_update.txt','r').read().split(',')
+video.new_update=media[0].find_next('li').span.string
+pic.new_update=media[1].find_next('li').span.string
+if video.last_update!=video.new_update : video.updated=1
+if pic.last_update!= pic.new_update: pic.updated=1
 
-f_pic=open('./pic.scp','w')
-f_pic.write('\n'.join(pictures))
-f_pic.close()
+#保存更新
 f_update=open('./last_update.txt','w')
-f_update.write(update_v+','+update_p)
+f_update.write(video.new_update+','+pic.new_update)
 f_update.close()
+
+#定义资源匹配模板
+video.pat_name = re.compile('(.+?)\s')
+pic.pat_name = re.compile('(.+?)\[(.+?)\]')
+pic.pat = re.compile('http(.+?)mp4')
+
+#将更新的video提取出来
+if video.updated:
+    ul=media[0].find_next('ul')
+    for a in ul.find_all('a'):
+        if a.find_next('span').string==video.last_update: 
+            video.save()
+            break
+        sub_page = get_content(url + a['href'], my_headers)
+        if sub_page:
+            temp_name = video.pat_name.search(a.string)
+            filename = temp_name.group(1) if temp_name else a.string[:4]
+            url_mp4 = pic.pat.search(sub_page)
+            if url_mp4:
+                video.lists.append('filename=' + filename +
+                              '&fileurl=' + url_mp4.group(0))
+    video.save()
+
+#将更新的picture提取出来    
+if pic.updated:
+    ul=media[1].find_next('ul')
+    for a in ul.find_all('a'):
+        if a.next_sibling.string==pic.last_update: 
+            pic.save()
+            break
+        sub_page = get_content(url + a['href'], my_headers)
+        if sub_page:
+            sub_soup=BeautifulSoup(sub_page,'lxml')
+            temp_name = pic.pat_name.search(a.string)
+            filename = temp_name.group(1) if temp_name else a.string[:4]
+            div_tag=sub_soup.h1.parent
+            pic_count=0
+            for img in div_tag.find_all('img'):
+                pic_count=pic_count+1
+                pic.lists.append(img['src']+'\t'+filename+str(pic_count)+'.jpg')
+    pic.save()
+            
+
+
+    
+
         
         
 	        
